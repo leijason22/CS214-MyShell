@@ -56,7 +56,6 @@ char** parse_command(char *command) {
 // Function to execute a parsed command
 void execute_command(char *command) {
     char **tokens = parse_command(command);
-
     // Example: handle built-in commands
     //cd: change the working directory
     //expects one argument, which is a path to a directory
@@ -71,6 +70,7 @@ void execute_command(char *command) {
             if (chdir(tokens[1]) != 0) {
                 fprintf(stderr, "cd: %s\n", strerror(errno));
             }
+            // printf("command executed");
         }
     } else if (strcmp(tokens[0], "pwd") == 0) {
         //pwd: prints current working directory to std output
@@ -82,6 +82,7 @@ void execute_command(char *command) {
         } else {
             fprintf(stderr, "pwd: %s\n", strerror(errno));
         }
+        // printf("command executed");
     } else if (strcmp(tokens[0], "which") == 0) {
         //which: takes a single argument (name of a program), prints path
         //that mysh would use if asked to start that program (result of search for bare names)
