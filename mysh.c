@@ -17,10 +17,11 @@
 int main(int argc, char *argv[]) {
     int interactive = isatty(STDIN_FILENO);
 
-    if (interactive)
-        printf("Welcome to my shell!\n");
+    if (argc == 1) {
+        if (interactive)
+            printf("Welcome to my shell!\n");
 
-    if (interactive) { // Interactive mode
+        if (interactive) { // Interactive mode
         char command[MAX_COMMAND_LENGTH];
         ssize_t bytes_read;
 
@@ -48,9 +49,10 @@ int main(int argc, char *argv[]) {
                 command[bytes_read - 1] = '\0';
 
             execute_command(command);
+            }
         }
-    } else if (!interactive) { // Batch mode
-
+    
+    } else if (argc > 1) { // Batch mode
         int fd = open(argv[1], O_RDONLY);
         if (fd == -1) {
             fprintf(stderr, "Error opening file: %s\n", argv[1]);
@@ -75,9 +77,6 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Usage: %s [batch_file]\n", argv[0]);
         exit(EXIT_FAILURE);
     }
-
-    if (interactive)
-        printf("Exiting my shell.\n");
 
     return 0;
 }
