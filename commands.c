@@ -139,7 +139,67 @@ char** parse_command(char *command) {
 
 // Function to execute a parsed command
 void execute_command(char *command) {
+    //saves current stdout file descriptor, so it can be pointed back to if redirection occurs
+    int stdout_backup = dup(STDOUT_FILENO);
+    int stdin_backup = dup(STDIN_FILENO);
+
     char **tokens = parse_command(command);
+
+    // Check for output redirection
+    int redirect_output = 0;
+    char *redirection_file_output = NULL;
+    // Check for input redirection
+    int redirect_input = 0;
+    char *redirection_file_input = NULL;
+
+    // Loop through tokens to find redirection symbols
+    for (int i = 0; tokens[i] != NULL; i++) {
+        if (strcmp(tokens[i], ">") == 0) {
+            // Output redirection
+            redirection_file_output = tokens[i + 1];
+            redirect_output = 1;
+            break;
+        } else if (strcmp(tokens[i], "<") == 0) {
+            // Input redirection
+            redirection_file_input = tokens[i + 1];
+            redirect_input = 1;
+            break;
+        }
+    }
+
+    if (redirect_output) {
+        // Open the output file
+        int fd = open(redirection_file_output, O_WRONLY | O_CREAT | O_TRUNC, 0640);
+        if (fd == -1) {
+            fprintf(stderr, "Failed to open output file: %s\n", redirection_file_output);
+            exit(EXIT_FAILURE);
+        }
+        // Redirect stdout to the file
+        if (dup2(fd, STDOUT_FILENO) == -1) {
+            fprintf(stderr, "Failed to redirect output\n");
+            close(fd);
+            exit(EXIT_FAILURE);
+        }
+        close(fd);
+    }
+
+    // Handle input redirection if needed
+    if (redirect_input) {
+        // Open the input file
+        int fd = open(redirection_file_input, O_RDONLY);
+        if (fd == -1) {
+            fprintf(stderr, "Failed to open input file: %s\n", redirection_file_input);
+            exit(EXIT_FAILURE);
+        }
+        // Redirect stdin from the file
+        if (dup2(fd, STDIN_FILENO) == -1) {
+            fprintf(stderr, "Failed to redirect input\n");
+            close(fd);
+            exit(EXIT_FAILURE);
+        }
+        close(fd);
+    }
+
     // Example: handle built-in commands
     //cd: change the working directory
     //expects one argument, which is a path to a directory
@@ -179,16 +239,22 @@ void execute_command(char *command) {
             if (path != NULL) {
                 char *path_copy = strdup(path);
                 char *dir = strtok(path_copy, ":");
+                int found = 0; // flag, 0 = not found, 1 = found
                 while (dir != NULL) {
                     char command_path[PATH_MAX];
                     snprintf(command_path, sizeof(command_path), "%s/%s", dir, tokens[1]);
                     if (access(command_path, F_OK | X_OK) == 0) {
                         printf("%s\n", command_path);
+                        found = 1;
                         break;
                     }
                     dir = strtok(NULL, ":");
                 }
                 free(path_copy);
+
+                if (!found) {
+                    printf("which: %s not found\n", tokens[1]);
+                }
             }
         }
     } else if (strcmp(tokens[0], "exit") == 0) {
@@ -205,6 +271,7 @@ void execute_command(char *command) {
         pid_t pid = fork();
         if (pid == 0) {
             // Child process
+            
             char *full_path = NULL;
             // Check if the command is in the current directory
             if (access(tokens[0], F_OK | X_OK) == 0) {
@@ -247,6 +314,12 @@ void execute_command(char *command) {
             // Handle exit status if needed
         }
     }
+    
+    // Restore stdout and stdin to their original file descriptors
+    dup2(stdout_backup, STDOUT_FILENO);
+    dup2(stdin_backup, STDIN_FILENO);
+    close(stdout_backup);
+    close(stdin_backup);
 
     // Free memory allocated for tokens
     for (int i = 0; tokens[i] != NULL; i++) {
