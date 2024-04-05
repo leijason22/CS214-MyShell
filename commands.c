@@ -23,11 +23,46 @@ ex: cd, pwd, which, exit, and EXTERNAL commands
 */
 
 // Function to parse a command and return an array of tokens
+// char** parse_command(char *command) {
+//     const char delimiters[] = " \t\n"; // Tokens are separated by whitespace
+//     int token_count = 0;
+//     char *token;
+//     char **tokens = malloc(sizeof(char*));
+
+//     if (!tokens) {
+//         fprintf(stderr, "Memory allocation error\n");
+//         exit(EXIT_FAILURE);
+//     }
+
+//     token = strtok(command, delimiters);
+//     while (token != NULL) {
+//         tokens[token_count] = strdup(token);
+//         if (!tokens[token_count]) {
+//             fprintf(stderr, "Memory allocation error\n");
+//             exit(EXIT_FAILURE);
+//         }
+//         token_count++;
+//         tokens = realloc(tokens, (token_count + 1) * sizeof(char*));
+//         if (!tokens) {
+//             fprintf(stderr, "Memory allocation error\n");
+//             exit(EXIT_FAILURE);
+//         }
+//         token = strtok(NULL, delimiters);
+//     }
+//     tokens[token_count] = NULL;
+//     return tokens;
+// }
+
+#define MAX_ARGS 64
+
 char** parse_command(char *command) {
     const char delimiters[] = " \t\n"; // Tokens are separated by whitespace
     int token_count = 0;
     char *token;
-    char **tokens = malloc(sizeof(char*));
+    char **tokens = malloc(MAX_ARGS * sizeof(char*));
+    char *redirection_file = NULL;
+    int redirect_input = 0; // Flag for input redirection
+    int redirect_output = 0; // Flag for output redirection
 
     if (!tokens) {
         fprintf(stderr, "Memory allocation error\n");
@@ -36,20 +71,69 @@ char** parse_command(char *command) {
 
     token = strtok(command, delimiters);
     while (token != NULL) {
-        tokens[token_count] = strdup(token);
-        if (!tokens[token_count]) {
-            fprintf(stderr, "Memory allocation error\n");
-            exit(EXIT_FAILURE);
-        }
-        token_count++;
-        tokens = realloc(tokens, (token_count + 1) * sizeof(char*));
-        if (!tokens) {
-            fprintf(stderr, "Memory allocation error\n");
-            exit(EXIT_FAILURE);
+        if (strcmp(token, "<") == 0) {
+            // Input redirection
+            token = strtok(NULL, delimiters); // Get the next token as the file name
+            if (token == NULL) {
+                fprintf(stderr, "Syntax error: Missing filename for input redirection\n");
+                exit(EXIT_FAILURE);
+            }
+            redirection_file = strdup(token);
+            redirect_input = 1;
+        } else if (strcmp(token, ">") == 0) {
+            // Output redirection
+            token = strtok(NULL, delimiters); // Get the next token as the file name
+            if (token == NULL) {
+                fprintf(stderr, "Syntax error: Missing filename for output redirection\n");
+                exit(EXIT_FAILURE);
+            }
+            redirection_file = strdup(token);
+            redirect_output = 1;
+        } else {
+            // Regular token, add it to the argument list
+            tokens[token_count] = strdup(token);
+            if (!tokens[token_count]) {
+                fprintf(stderr, "Memory allocation error\n");
+                exit(EXIT_FAILURE);
+            }
+            token_count++;
         }
         token = strtok(NULL, delimiters);
     }
+
+    // Add NULL terminator to the argument list
     tokens[token_count] = NULL;
+
+    // Set up redirection if necessary
+    if (redirect_input) {
+        int fd = open(redirection_file, O_RDONLY);
+        if (fd == -1) {
+            fprintf(stderr, "Failed to open input file: %s\n", redirection_file);
+            exit(EXIT_FAILURE);
+        }
+        // Redirect stdin to the file
+        if (dup2(fd, STDIN_FILENO) == -1) {
+            fprintf(stderr, "Failed to redirect input\n");
+            close(fd);
+            exit(EXIT_FAILURE);
+        }
+        close(fd);
+    }
+    if (redirect_output) {
+        int fd = open(redirection_file, O_WRONLY | O_CREAT | O_TRUNC, 0640);
+        if (fd == -1) {
+            fprintf(stderr, "Failed to open output file: %s\n", redirection_file);
+            exit(EXIT_FAILURE);
+        }
+        // Redirect stdout to the file
+        if (dup2(fd, STDOUT_FILENO) == -1) {
+            fprintf(stderr, "Failed to redirect output\n");
+            close(fd);
+            exit(EXIT_FAILURE);
+        }
+        close(fd);
+    }
+
     return tokens;
 }
 
@@ -121,10 +205,38 @@ void execute_command(char *command) {
         pid_t pid = fork();
         if (pid == 0) {
             // Child process
-            execvp(tokens[0], tokens);
-            // execvp returns only if an error occurs
-            fprintf(stderr, "Error executing command %s\n", tokens[0]);
-            exit(EXIT_FAILURE);
+            char *full_path = NULL;
+            // Check if the command is in the current directory
+            if (access(tokens[0], F_OK | X_OK) == 0) {
+                full_path = strdup(tokens[0]);
+            } else {
+                // Search for the command in the PATH environment variable
+                char *path = getenv("PATH");
+                if (path != NULL) {
+                    char *path_copy = strdup(path);
+                    char *dir = strtok(path_copy, ":");
+                    while (dir != NULL) {
+                        char command_path[PATH_MAX];
+                        snprintf(command_path, sizeof(command_path), "%s/%s", dir, tokens[0]);
+                        if (access(command_path, F_OK | X_OK) == 0) {
+                            full_path = strdup(command_path);
+                            break;
+                        }
+                        dir = strtok(NULL, ":");
+                    }
+                    free(path_copy);
+                }
+            }
+            if (full_path != NULL) {
+                execv(full_path, tokens);
+                // execv returns only if an error occurs
+                fprintf(stderr, "Error executing command %s\n", tokens[0]);
+                free(full_path);
+                exit(EXIT_FAILURE);
+            } else {
+                fprintf(stderr, "Command not found: %s\n", tokens[0]);
+                exit(EXIT_FAILURE);
+            }
         } else if (pid < 0) {
             // Fork failed
             fprintf(stderr, "Fork failed\n");
