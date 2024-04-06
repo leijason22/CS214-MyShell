@@ -8,61 +8,69 @@
 #include <sys/wait.h>
 #include <errno.h>
 #include <limits.h>
-
-/* parsing functions
-- functions to parse commands, tokenization, handling redirection, pipes, conditionals
-*/
-
-/* execution functions
-- functions to execute parsesd commands, handling build-in commands
-ex: cd, pwd, which, exit, and EXTERNAL commands
-*/
-
-/* I/O functions
-- functions to handle file IO, including redirection of standard input/output
-*/
-
-// Function to parse a command and return an array of tokens
-// char** parse_command(char *command) {
-//     const char delimiters[] = " \t\n"; // Tokens are separated by whitespace
-//     int token_count = 0;
-//     char *token;
-//     char **tokens = malloc(sizeof(char*));
-
-//     if (!tokens) {
-//         fprintf(stderr, "Memory allocation error\n");
-//         exit(EXIT_FAILURE);
-//     }
-
-//     token = strtok(command, delimiters);
-//     while (token != NULL) {
-//         tokens[token_count] = strdup(token);
-//         if (!tokens[token_count]) {
-//             fprintf(stderr, "Memory allocation error\n");
-//             exit(EXIT_FAILURE);
-//         }
-//         token_count++;
-//         tokens = realloc(tokens, (token_count + 1) * sizeof(char*));
-//         if (!tokens) {
-//             fprintf(stderr, "Memory allocation error\n");
-//             exit(EXIT_FAILURE);
-//         }
-//         token = strtok(NULL, delimiters);
-//     }
-//     tokens[token_count] = NULL;
-//     return tokens;
-// }
+#include <glob.h>
 
 #define MAX_ARGS 64
+
+void wildcards(char ***tokens, int *token_count, int *size) {
+    char **expanded_tokens = malloc(MAX_ARGS * sizeof(char*));
+    int new_token_count = 0;
+
+    if (!expanded_tokens) {
+        fprintf(stderr, "Memory allocation error\n");
+        exit(EXIT_FAILURE);
+    }
+
+    for (int i = 0; i < *token_count; i++) {
+        if (strchr((*tokens)[i], '*')) {
+            glob_t glob_result;
+            if (glob((*tokens)[i], 0, NULL, &glob_result) == 0) {
+                for (size_t j = 0; j < glob_result.gl_pathc; j++) {
+                    expanded_tokens[new_token_count++] = strdup(glob_result.gl_pathv[j]);
+                    if (!expanded_tokens[new_token_count - 1]) {
+                        fprintf(stderr, "Memory allocation error\n");
+                        exit(EXIT_FAILURE);
+                    }
+                    if (new_token_count >= MAX_ARGS - 1) {
+                        fprintf(stderr, "Too many arguments\n");
+                        exit(EXIT_FAILURE);
+                    }
+                }
+                globfree(&glob_result);
+            }
+        } else {
+            expanded_tokens[new_token_count++] = strdup((*tokens)[i]);
+            if (!expanded_tokens[new_token_count - 1]) {
+                fprintf(stderr, "Memory allocation error\n");
+                exit(EXIT_FAILURE);
+            }
+            if (new_token_count >= MAX_ARGS - 1) {
+                fprintf(stderr, "Too many arguments\n");
+                exit(EXIT_FAILURE);
+            }
+        }
+    }
+
+    // Add NULL terminator to the expanded tokens
+    expanded_tokens[new_token_count] = NULL;
+
+    // Free the original tokens and update with the expanded tokens
+    for (int i = 0; i < *token_count; i++) {
+        free((*tokens)[i]);
+    }
+    free(*tokens);
+
+    *tokens = expanded_tokens;
+    *token_count = new_token_count;
+    *size = new_token_count;
+}
 
 char** parse_command(char *command) {
     const char delimiters[] = " \t\n"; // Tokens are separated by whitespace
     int token_count = 0;
     char *token;
     char **tokens = malloc(MAX_ARGS * sizeof(char*));
-    char *redirection_file = NULL;
-    int redirect_input = 0; // Flag for input redirection
-    int redirect_output = 0; // Flag for output redirection
+    int size = 0; // Current size of the tokens array
 
     if (!tokens) {
         fprintf(stderr, "Memory allocation error\n");
@@ -71,68 +79,21 @@ char** parse_command(char *command) {
 
     token = strtok(command, delimiters);
     while (token != NULL) {
-        if (strcmp(token, "<") == 0) {
-            // Input redirection
-            token = strtok(NULL, delimiters); // Get the next token as the file name
-            if (token == NULL) {
-                fprintf(stderr, "Syntax error: Missing filename for input redirection\n");
-                exit(EXIT_FAILURE);
-            }
-            redirection_file = strdup(token);
-            redirect_input = 1;
-        } else if (strcmp(token, ">") == 0) {
-            // Output redirection
-            token = strtok(NULL, delimiters); // Get the next token as the file name
-            if (token == NULL) {
-                fprintf(stderr, "Syntax error: Missing filename for output redirection\n");
-                exit(EXIT_FAILURE);
-            }
-            redirection_file = strdup(token);
-            redirect_output = 1;
-        } else {
-            // Regular token, add it to the argument list
-            tokens[token_count] = strdup(token);
-            if (!tokens[token_count]) {
-                fprintf(stderr, "Memory allocation error\n");
-                exit(EXIT_FAILURE);
-            }
-            token_count++;
+        tokens[token_count] = strdup(token);
+        if (!tokens[token_count]) {
+            fprintf(stderr, "Memory allocation error\n");
+            exit(EXIT_FAILURE);
         }
+        token_count++;
+        size++;
         token = strtok(NULL, delimiters);
     }
 
     // Add NULL terminator to the argument list
     tokens[token_count] = NULL;
 
-    // Set up redirection if necessary
-    if (redirect_input) {
-        int fd = open(redirection_file, O_RDONLY);
-        if (fd == -1) {
-            fprintf(stderr, "Failed to open input file: %s\n", redirection_file);
-            exit(EXIT_FAILURE);
-        }
-        // Redirect stdin to the file
-        if (dup2(fd, STDIN_FILENO) == -1) {
-            fprintf(stderr, "Failed to redirect input\n");
-            close(fd);
-            exit(EXIT_FAILURE);
-        }
-        close(fd);
-    }
-    if (redirect_output) {
-        int fd = open(redirection_file, O_WRONLY | O_CREAT | O_TRUNC, 0640);
-        if (fd == -1) {
-            fprintf(stderr, "Failed to open output file: %s\n", redirection_file);
-            exit(EXIT_FAILURE);
-        }
-        // Redirect stdout to the file
-        if (dup2(fd, STDOUT_FILENO) == -1) {
-            fprintf(stderr, "Failed to redirect output\n");
-            close(fd);
-            exit(EXIT_FAILURE);
-        }
-        close(fd);
-    }
+    // Expand wildcards
+    wildcards(&tokens, &token_count, &size);
 
     return tokens;
 }
