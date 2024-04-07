@@ -63,6 +63,7 @@ void wildcards(char ***tokens, int *token_count, int *size) {
     *tokens = expanded_tokens;
     *token_count = new_token_count;
     *size = new_token_count;
+
 }
 
 char** parse_command(char *command) {
@@ -181,6 +182,10 @@ void execute_command(char *command, int* flag) {
         tokens[size - 1] = NULL;
         size--;
     } else if ((((strcmp(tokens[0], "then") == 0) && *flag == 0) || ((strcmp(tokens[0], "else") == 0) && *flag == 1))) {
+        for (int i = 0; tokens[i] != NULL; i++) {
+        free(tokens[i]);
+        }
+        free(tokens);
         printf("Cannot execute because previous statement failed");
         return;
     }
@@ -318,7 +323,7 @@ void execute_command(char *command, int* flag) {
     }
     free(tokens);
 
-    int status;
+    int status = 0;
     if (WIFEXITED(status)) {
         // The child process terminated normally
         int exit_status = WEXITSTATUS(status);
