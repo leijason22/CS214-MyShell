@@ -99,7 +99,7 @@ char** parse_command(char *command) {
 }
 
 // Function to execute a parsed command
-void execute_command(char *command) {
+void execute_command(char *command, int* flag) {
     //saves current stdout file descriptor, so it can be pointed back to if redirection occurs
     int stdout_backup = dup(STDOUT_FILENO);
     int stdin_backup = dup(STDIN_FILENO);
@@ -161,13 +161,32 @@ void execute_command(char *command) {
         close(fd);
     }
 
+    int size = 0;
+    while (tokens[size] != NULL) {
+        size++;
+    }
     // Example: handle built-in commands
     //cd: change the working directory
     //expects one argument, which is a path to a directory
     //use chdir() to change its own directory
     //cd should print an error message and fail if it is given the wrong number of arguments
     //or if chdir() fails
-    if (strcmp(tokens[0], "cd") == 0) {
+    if(tokens[0] == NULL){} 
+    else if ((((strcmp(tokens[0], "then") == 0) && *flag == 1) || ((strcmp(tokens[0], "else") == 0) && *flag == 0)) && tokens[0] != NULL) {
+        free(tokens[0]);
+        // Shift all elements by one position to the left
+        for (int i = 0; i < size - 1; i++) {
+            tokens[i] = tokens[i + 1];
+        }
+        tokens[size - 1] = NULL;
+        size--;
+    } else if ((((strcmp(tokens[0], "then") == 0) && *flag == 0) || ((strcmp(tokens[0], "else") == 0) && *flag == 1)) && tokens[0] != NULL) {
+        printf("Cannot execute because previous statement failed");
+        return;
+    }
+
+    if(tokens[0] == NULL){} 
+    else if (strcmp(tokens[0], "cd") == 0) {
         // Example: chdir(tokens[1]);
         if (tokens[1] == NULL) {
             fprintf(stderr, "cd: missing argument\n");
@@ -275,7 +294,7 @@ void execute_command(char *command) {
             // Handle exit status if needed
         }
     }
-    
+   
     // Restore stdout and stdin to their original file descriptors
     dup2(stdout_backup, STDOUT_FILENO);
     dup2(stdin_backup, STDIN_FILENO);
@@ -287,4 +306,15 @@ void execute_command(char *command) {
         free(tokens[i]);
     }
     free(tokens);
+
+    int status;
+    if (WIFEXITED(status)) {
+        // The child process terminated normally
+        int exit_status = WEXITSTATUS(status);
+        if (exit_status != 0) {
+            *flag = 0;
+        } else {
+            *flag = 1;
+        }
+    } 
 }

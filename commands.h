@@ -1,3 +1,4 @@
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,6 +11,6 @@
 
 // Function to parse a command and return an array of tokens
 char** parse_command(char *command);
-
+void wildcards(char ***tokens, int *token_count, int *size);
 // Function to execute a parsed command
-void execute_command(char *command);
+void execute_command(char *command, int* flag);
