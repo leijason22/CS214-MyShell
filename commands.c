@@ -171,8 +171,8 @@ void execute_command(char *command, int* flag) {
     //use chdir() to change its own directory
     //cd should print an error message and fail if it is given the wrong number of arguments
     //or if chdir() fails
-    if(tokens[0] == NULL){} 
-    else if ((((strcmp(tokens[0], "then") == 0) && *flag == 1) || ((strcmp(tokens[0], "else") == 0) && *flag == 0)) && tokens[0] != NULL) {
+    if(tokens[0] == NULL){*flag = 0;} 
+    else if ((((strcmp(tokens[0], "then") == 0) && *flag == 1) || ((strcmp(tokens[0], "else") == 0) && *flag == 0))) {
         free(tokens[0]);
         // Shift all elements by one position to the left
         for (int i = 0; i < size - 1; i++) {
@@ -180,7 +180,7 @@ void execute_command(char *command, int* flag) {
         }
         tokens[size - 1] = NULL;
         size--;
-    } else if ((((strcmp(tokens[0], "then") == 0) && *flag == 0) || ((strcmp(tokens[0], "else") == 0) && *flag == 1)) && tokens[0] != NULL) {
+    } else if ((((strcmp(tokens[0], "then") == 0) && *flag == 0) || ((strcmp(tokens[0], "else") == 0) && *flag == 1))) {
         printf("Cannot execute because previous statement failed");
         return;
     }
@@ -189,21 +189,26 @@ void execute_command(char *command, int* flag) {
     else if (strcmp(tokens[0], "cd") == 0) {
         // Example: chdir(tokens[1]);
         if (tokens[1] == NULL) {
+            *flag = 1;
             fprintf(stderr, "cd: missing argument\n");
         } else {
             if (chdir(tokens[1]) != 0) {
+                *flag = 1;
                 fprintf(stderr, "cd: %s\n", strerror(errno));
             }
             // printf("command executed");
         }
+        *flag = 0;
     } else if (strcmp(tokens[0], "pwd") == 0) {
         //pwd: prints current working directory to std output
         //use getcwd()
         // Example: system("pwd");
         char cwd[PATH_MAX];
         if (getcwd(cwd, sizeof(cwd)) != NULL) {
+            *flag = 0;
             printf("%s\n", cwd);
         } else {
+            *flag = 1;
             fprintf(stderr, "pwd: %s\n", strerror(errno));
         }
         // printf("command executed");
@@ -213,6 +218,7 @@ void execute_command(char *command, int* flag) {
         //print nothing and fails if it is given the wrong number of arguments, or the name of a built-in, or if the program
         //is not found
         if (tokens[1] == NULL) {
+            *flag = 1;
             fprintf(stderr, "which: missing argument\n");
         } else {
             char *path = getenv("PATH");
@@ -233,9 +239,11 @@ void execute_command(char *command, int* flag) {
                 free(path_copy);
 
                 if (!found) {
+                    *flag = 1;
                     printf("which: %s not found\n", tokens[1]);
                 }
             }
+            *flag = 0;
         }
     } else if (strcmp(tokens[0], "exit") == 0) {
         //exit: indicates that mysh should cease reading commands and terminate
@@ -277,15 +285,18 @@ void execute_command(char *command, int* flag) {
             if (full_path != NULL) {
                 execv(full_path, tokens);
                 // execv returns only if an error occurs
+                *flag = 1;
                 fprintf(stderr, "Error executing command %s\n", tokens[0]);
                 free(full_path);
                 exit(EXIT_FAILURE);
             } else {
+                *flag = 1;
                 fprintf(stderr, "Command not found: %s\n", tokens[0]);
                 exit(EXIT_FAILURE);
             }
         } else if (pid < 0) {
             // Fork failed
+            *flag = 1;
             fprintf(stderr, "Fork failed\n");
         } else {
             // Parent process
