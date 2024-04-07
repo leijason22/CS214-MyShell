@@ -172,8 +172,9 @@ void execute_command(char *command, int* flag) {
     //use chdir() to change its own directory
     //cd should print an error message and fail if it is given the wrong number of arguments
     //or if chdir() fails
+    printf("%d", *flag);
     if(tokens[0] == NULL){*flag = 0;} 
-    else if ((((strcmp(tokens[0], "then") == 0) && *flag == 1) || ((strcmp(tokens[0], "else") == 0) && *flag == 0))) {
+    else if ((((strcmp(tokens[0], "then") == 0) && *flag == 0) || ((strcmp(tokens[0], "else") == 0) && *flag == 1))) {
         free(tokens[0]);
         // Shift all elements by one position to the left
         for (int i = 0; i < size - 1; i++) {
@@ -181,16 +182,17 @@ void execute_command(char *command, int* flag) {
         }
         tokens[size - 1] = NULL;
         size--;
-    } else if ((((strcmp(tokens[0], "then") == 0) && *flag == 0) || ((strcmp(tokens[0], "else") == 0) && *flag == 1))) {
+    } else if ((((strcmp(tokens[0], "then") == 0) && *flag == 1) || ((strcmp(tokens[0], "else") == 0) && *flag == 0))) {
         for (int i = 0; tokens[i] != NULL; i++) {
         free(tokens[i]);
         }
         free(tokens);
+        *flag = 1;
         printf("Cannot execute because previous statement failed");
         return;
     }
 
-    if(tokens[0] == NULL){} 
+    if(tokens[0] == NULL){*flag = 0;} 
     else if (strcmp(tokens[0], "cd") == 0) {
         // Example: chdir(tokens[1]);
         if (tokens[1] == NULL) {
@@ -322,15 +324,16 @@ void execute_command(char *command, int* flag) {
         free(tokens[i]);
     }
     free(tokens);
+    *flag = 0;
 
-    int status = 0;
-    if (WIFEXITED(status)) {
-        // The child process terminated normally
-        int exit_status = WEXITSTATUS(status);
-        if (exit_status != 0) {
-            *flag = 0;
-        } else {
-            *flag = 1;
-        }
-    } 
+    // int status = 0;
+    // if (WIFEXITED(status)) {
+    //     // The child process terminated normally
+    //     int exit_status = WEXITSTATUS(status);
+    //     if (exit_status != 0) {
+    //         *flag = 0;
+    //     } else {
+    //         *flag = 1;
+    //     }
+    // } 
 }
