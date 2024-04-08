@@ -208,7 +208,7 @@ void execute_command(char *command) {
     // Handle output redirection if needed
     if (redirect_output) {
         // Open the output file
-        int fd = open(redirection_file_output, O_WRONLY | O_CREAT | O_TRUNC, 0640);
+        int fd = open(redirection_file_output, S_IRUSR | S_IWUSR | S_IRGRP, 0640);
         if (fd == -1) {
             fprintf(stderr, "Failed to open output file: %s\n", redirection_file_output);
             exit(EXIT_FAILURE);
@@ -240,7 +240,7 @@ void execute_command(char *command) {
     }
 
     if(tokens[0] == NULL){
-        fprintf(stderr, "Missing argument.\n");
+        fprintf(stderr, "Missing command.\n");
     }
     else if (strcmp(tokens[0], "cd") == 0) {
         // Example: chdir(tokens[1]);
