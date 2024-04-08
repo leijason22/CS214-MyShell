@@ -1,0 +1,6 @@
+This is a sample input file.
+It contains multiple lines of text.
+Each line may or may not contain the keyword.
+The keyword we are searching for is "example".
+Hello everybody this is an example.
+example example example.
