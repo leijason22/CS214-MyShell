@@ -7,9 +7,10 @@
 #include <sys/wait.h>
 #include <errno.h>
 #include <limits.h>
+#include <glob.h>
 
-// Function to parse a command and return an array of tokens
-char** parse_command(char *command);
-
-// Function to execute a parsed command
-void execute_command(char *command);
+void wildcards(char ***tokens, int *token_count, int *size);
+char **parse_command(char *command);
+char *find_command_path(const char *command);
+void execute_piped_commands(char **first_command, char **second_command);
+void execute_command(char *command, int *flag);
